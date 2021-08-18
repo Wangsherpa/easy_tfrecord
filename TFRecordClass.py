@@ -7,12 +7,30 @@ from tensorflow.data.experimental import AUTOTUNE
 from contextlib import ExitStack
 
 class TFRecord:
+
     def __init__(self, n_classes, image_shape=[224, 224, 3]):
+        """
+        TFRecord class to write images to TF REcords and load TF Records to tf.data
+
+        Attributes:
+            n_classes (int) representing number of unique classes to classify.
+            image_shape (list of integers) representing the target image shape.
+        """
         self.image_shape = image_shape
         self.n_classes = n_classes
         
     @tf.autograph.experimental.do_not_convert
     def _load_img(self, img_path, label):
+        """
+        Function to read in image path and returns an image.
+
+        Args:
+            img_path (string) representing path to an image.
+            label (int) encoded label for image
+
+        Returns:
+            tuple: (image, label)
+        """
         shape=self.image_shape
         image = tf.io.read_file(img_path)
         image = tf.image.decode_jpeg(image, channels=shape[2])
@@ -21,6 +39,16 @@ class TFRecord:
         return (image, label)
     
     def _create_example(self, image, label):
+        """
+        Function to create an Example Protobuf.
+
+        Args:
+            image: an array of shape [height, width, depth]
+            label: corresponding label for an image
+
+        Returns:
+            example: Tensorflow Protobufs
+        """
         # serialize tensor
         image_data = tf.io.serialize_tensor(image)
         # create feature dictionary
@@ -35,6 +63,17 @@ class TFRecord:
             ))
     
     def compute_nshards(self, image_paths):
+        """
+        Function to compute number of chunks required to write TFRecords.
+
+        Args:
+            image_paths (list of strings): paths to images
+        
+        Returns:
+            int: number of chunks (shards).
+
+        Note: each shard's size will be between 150 - 200 apprx.
+        """
         print("[INFO] Computing n_shards required...")
         total_image_size = 0
         for path in image_paths:
@@ -48,6 +87,19 @@ class TFRecord:
     
     # create a function to save dataset in TFRecords format
     def write_tfrecords(self, image_paths, labels, save_path, n_shards, prefix="file"):
+        """
+        Function to write images to TF Records.
+
+        Args:
+            image_paths (list of strings): path to images
+            labels (list of integers): labels for images
+            save_path (str): path to save generated TF Records.
+            n_shards (int): number os shards to be created.
+            prefix (str): filename prefix. # optional
+
+        Returns:
+            list: generated filenames.
+        """
         print("[INFO] {} shards will be created".format(n_shards))
         # create tf dataset
         dataset = tf.data.Dataset.from_tensor_slices((image_paths, labels))
@@ -74,6 +126,12 @@ class TFRecord:
         
     @tf.autograph.experimental.do_not_convert
     def _preprocess(self, tfrecord):
+        """
+        Function to parse Examples (TensorFlow Protobufs).
+
+        Returns:
+            tuple: (image, label)
+        """
         feature_description = {
             "image": tf.io.FixedLenFeature([], tf.string),
             "label": tf.io.FixedLenFeature([], tf.int64)
@@ -92,6 +150,17 @@ class TFRecord:
         return (image, label_oh)
 
     def parse_tfrecord(self, tfrecord_path, batch_size=32, shuffle_buffer_size=None):
+        """
+        Function to parse TFRecords.
+
+        Args:
+            tfrecord_path (str): path to directory where all TFRecords are stored.
+            batch_size (int): batch size for dataset
+            shuffle_buffer_size (int or None): buffer size to shuffle training data.
+
+        Returns:
+            tf.data: tensorflow dataset.
+        """
         file_paths = os.listdir(tfrecord_path)
         file_paths = [os.path.join(tfrecord_path, path) for path in file_paths 
                        if not path.startswith(".")]
